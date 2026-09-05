@@ -1,0 +1,27 @@
+{
+  "name": "OPTICST — Boutique de Lentes Yael",
+  "short_name": "OPTICST",
+  "id": "./",
+  "description": "Aplicación de gestión para Boutique de Lentes Yael.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F6FA",
+  "theme_color": "#9076DA",
+  "lang": "es-MX",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
