@@ -1,4 +1,4 @@
-const CACHE_NAME = "opticst-shell-v1";
+const CACHE_NAME = "opticst-shell-v2";
 
 const SHELL = [
   "./",
