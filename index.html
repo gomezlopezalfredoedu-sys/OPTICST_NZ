@@ -1371,25 +1371,27 @@ input,select{min-height:53px!important}
 
     pending[id] = {
       ok: typeof ok === 'function' ? ok : function () {},
-      fail: typeof fail === 'function' ? fail : function () {}
+      fail: typeof fail === 'function' ? fail : function () {},
+      iframe: null,
+      form: null
     };
 
-    var iframe = document.getElementById('opticstApiFrame');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'opticstApiFrame';
-      iframe.name = 'opticstApiFrame';
-      iframe.setAttribute('aria-hidden', 'true');
-      iframe.style.position = 'fixed';
-      iframe.style.width = '1px';
-      iframe.style.height = '1px';
-      iframe.style.border = '0';
-      iframe.style.opacity = '0';
-      iframe.style.pointerEvents = 'none';
-      iframe.style.left = '-10px';
-      iframe.style.top = '-10px';
-      document.body.appendChild(iframe);
-    }
+    // Cada petición usa su propio iframe. Esto evita que dos consultas
+    // simultáneas se pisen entre sí y que una respuesta se pierda.
+    var iframe = document.createElement('iframe');
+    iframe.id = 'opticstApiFrame_' + id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    iframe.name = iframe.id;
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.left = '-10px';
+    iframe.style.top = '-10px';
+    document.body.appendChild(iframe);
+    pending[id].iframe = iframe;
 
     var form = document.createElement('form');
     form.method = 'POST';
@@ -1411,12 +1413,14 @@ input,select{min-height:53px!important}
     add('args', JSON.stringify(args || []));
 
     document.body.appendChild(form);
+    pending[id].form = form;
 
     var timer = setTimeout(function () {
       if (!pending[id]) return;
       var cb = pending[id];
       delete pending[id];
-      try { form.remove(); } catch (e) {}
+      try { if (cb.form) cb.form.remove(); } catch (e) {}
+      try { if (cb.iframe) cb.iframe.remove(); } catch (e2) {}
       cb.fail(new Error('Tiempo de espera agotado al comunicarse con OPTICST.'));
     }, 30000);
 
@@ -1432,6 +1436,7 @@ input,select{min-height:53px!important}
       var cb2 = pending[id];
       delete pending[id];
       try { form.remove(); } catch (e2) {}
+      try { iframe.remove(); } catch (e3) {}
       if (cb2) cb2.fail(e);
     }
   }
@@ -1445,6 +1450,8 @@ input,select{min-height:53px!important}
 
     clearTimeout(cb.timer);
     delete pending[String(data.rid)];
+    try { if (cb.form) cb.form.remove(); } catch (e0) {}
+    try { if (cb.iframe) cb.iframe.remove(); } catch (e1) {}
 
     try {
       if (data.ok) cb.ok(data.data);
