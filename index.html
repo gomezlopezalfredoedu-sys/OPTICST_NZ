@@ -43,6 +43,8 @@ button:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(144,118,218,.18),0 5
 .pantalla{width:100%}
 .dato-resumen{padding:9px 0;border-bottom:1px solid #ECECF1}
 .boton-ticket{background:#17151E;color:#fff}
+.boton-whatsapp{background:#25D366;color:#fff}
+.boton-whatsapp:disabled{opacity:.65;cursor:wait}
 .boton-pdf,.boton-seleccionar{background:linear-gradient(135deg,var(--l),var(--l2));color:#fff}
 .grupo-ticket{margin-top:10px}
 .resultado-seleccionado{background:linear-gradient(135deg,#EEFDFF,#F8F5FF);border:1px solid var(--t);border-radius:13px;padding:14px;margin-top:10px}
@@ -1371,27 +1373,25 @@ input,select{min-height:53px!important}
 
     pending[id] = {
       ok: typeof ok === 'function' ? ok : function () {},
-      fail: typeof fail === 'function' ? fail : function () {},
-      iframe: null,
-      form: null
+      fail: typeof fail === 'function' ? fail : function () {}
     };
 
-    // Cada petición usa su propio iframe. Esto evita que dos consultas
-    // simultáneas se pisen entre sí y que una respuesta se pierda.
-    var iframe = document.createElement('iframe');
-    iframe.id = 'opticstApiFrame_' + id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    iframe.name = iframe.id;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.position = 'fixed';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    iframe.style.left = '-10px';
-    iframe.style.top = '-10px';
-    document.body.appendChild(iframe);
-    pending[id].iframe = iframe;
+    var iframe = document.getElementById('opticstApiFrame');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'opticstApiFrame';
+      iframe.name = 'opticstApiFrame';
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.position = 'fixed';
+      iframe.style.width = '1px';
+      iframe.style.height = '1px';
+      iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      iframe.style.left = '-10px';
+      iframe.style.top = '-10px';
+      document.body.appendChild(iframe);
+    }
 
     var form = document.createElement('form');
     form.method = 'POST';
@@ -1413,14 +1413,12 @@ input,select{min-height:53px!important}
     add('args', JSON.stringify(args || []));
 
     document.body.appendChild(form);
-    pending[id].form = form;
 
     var timer = setTimeout(function () {
       if (!pending[id]) return;
       var cb = pending[id];
       delete pending[id];
-      try { if (cb.form) cb.form.remove(); } catch (e) {}
-      try { if (cb.iframe) cb.iframe.remove(); } catch (e2) {}
+      try { form.remove(); } catch (e) {}
       cb.fail(new Error('Tiempo de espera agotado al comunicarse con OPTICST.'));
     }, 30000);
 
@@ -1436,7 +1434,6 @@ input,select{min-height:53px!important}
       var cb2 = pending[id];
       delete pending[id];
       try { form.remove(); } catch (e2) {}
-      try { iframe.remove(); } catch (e3) {}
       if (cb2) cb2.fail(e);
     }
   }
@@ -1450,8 +1447,6 @@ input,select{min-height:53px!important}
 
     clearTimeout(cb.timer);
     delete pending[String(data.rid)];
-    try { if (cb.form) cb.form.remove(); } catch (e0) {}
-    try { if (cb.iframe) cb.iframe.remove(); } catch (e1) {}
 
     try {
       if (data.ok) cb.ok(data.data);
@@ -2127,6 +2122,15 @@ function mostrarExito(idVenta, venta) {
     generarImagenTicket(idVenta, venta);
   };
   grupo.appendChild(imagenBtn);
+
+  const whatsappBtn = document.createElement('button');
+  whatsappBtn.type = 'button';
+  whatsappBtn.className = 'boton-whatsapp';
+  whatsappBtn.textContent = '📲 ENVIAR POR WHATSAPP';
+  whatsappBtn.onclick = function() {
+    compartirTicketWhatsApp(idVenta, venta);
+  };
+  grupo.appendChild(whatsappBtn);
 
   const pdfBtn = document.createElement('button');
   pdfBtn.type = 'button';
@@ -2811,6 +2815,84 @@ function generarPdfTicket(idVenta, ventaPreferida) {
 }
 
 /* Generar imagen PNG del mismo ticket. */
+/* Compartir la imagen del ticket mediante el menú nativo de Android/WhatsApp. */
+async function compartirTicketWhatsApp(idVenta, ventaPreferida) {
+
+  if (!idVenta) return;
+
+  if (!navigator.share || !navigator.canShare) {
+    alert('Tu navegador no permite compartir imágenes directamente. Usa GENERAR IMAGEN y comparte el ticket desde ahí.');
+    return;
+  }
+
+  const boton = document.activeElement;
+  const textoOriginal = boton && boton.tagName === 'BUTTON' ? boton.textContent : '';
+  if (boton && boton.tagName === 'BUTTON') {
+    boton.disabled = true;
+    boton.textContent = 'PREPARANDO…';
+  }
+
+  datosTicket_(idVenta, async function(venta, cliente) {
+    try {
+      const svg = ticketSvg_(venta, cliente);
+      const blobSvg = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blobSvg);
+      const imagen = new Image();
+
+      await new Promise(function(resolve, reject) {
+        imagen.onload = resolve;
+        imagen.onerror = reject;
+        imagen.src = url;
+      });
+
+      const escala = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = imagen.width * escala;
+      canvas.height = imagen.height * escala;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No fue posible preparar la imagen.');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(imagen, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+
+      const pngBlob = await new Promise(function(resolve, reject) {
+        canvas.toBlob(function(b) {
+          if (b) resolve(b);
+          else reject(new Error('No fue posible convertir el ticket a PNG.'));
+        }, 'image/png');
+      });
+
+      const nombreArchivo = 'Ticket_' + String(venta.ID_Venta || idVenta).replace(/[^a-zA-Z0-9_-]/g, '_') + '.png';
+      const archivo = new File([pngBlob], nombreArchivo, { type: 'image/png' });
+
+      if (!navigator.canShare({ files: [archivo] })) {
+        throw new Error('Este dispositivo no permite compartir archivos desde el navegador.');
+      }
+
+      const nombreCliente = (cliente && cliente.Nombre) || venta.Nombre_Cliente || 'cliente';
+      await navigator.share({
+        files: [archivo],
+        title: 'Ticket ' + (venta.ID_Venta || idVenta),
+        text: 'Hola ' + nombreCliente + ', te compartimos tu ticket de Boutique de Lentes Yael.'
+      });
+
+    } catch (error) {
+      if (error && error.name !== 'AbortError') {
+        alert('No fue posible compartir el ticket. Puedes usar GENERAR IMAGEN y compartirlo manualmente.');
+        console.error(error);
+      }
+    } finally {
+      if (boton && boton.tagName === 'BUTTON') {
+        boton.disabled = false;
+        boton.textContent = textoOriginal || 'ENVIAR POR WHATSAPP';
+      }
+    }
+  }, ventaPreferida);
+}
+
 function generarImagenTicket(idVenta, ventaPreferida) {
 
   if (!idVenta) return;
@@ -3368,6 +3450,7 @@ function mostrarDetalleVentaModulo(venta) {
       '<div class="v20-actions">' +
         '<button type="button" class="boton-ticket" onclick="verTicket(\'' + venta.ID_Venta + '\')">VER TICKET 58 MM</button>' +
         '<button type="button" class="boton-imagen" onclick="generarImagenTicket(\'' + venta.ID_Venta + '\')">GENERAR IMAGEN</button>' +
+        '<button type="button" class="boton-whatsapp" onclick="compartirTicketWhatsApp(\'' + venta.ID_Venta + '\')">📲 ENVIAR POR WHATSAPP</button>' +
         '<button type="button" class="boton-pdf" onclick="generarPdfTicket(\'' + venta.ID_Venta + '\')">IMPRIMIR / GUARDAR PDF</button>' +
         (Number(venta.Saldo || 0) > 0 ? '<button type="button" class="boton-seleccionar" onclick="abrirAbonoDesdeVenta(\'' + venta.ID_Venta + '\')">REGISTRAR ABONO</button>' : '') +
       '</div>' +
