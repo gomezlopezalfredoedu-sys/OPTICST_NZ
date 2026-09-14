@@ -3278,10 +3278,21 @@ function seleccionarVentaParaAbono(indice) {
 
 function guardarAbono() {
   if (!ventaAbonoActual) { alert('Primero busca una venta.'); return; }
-  const importe=Number(document.getElementById('nuevoAbono').value)||0;
-  const saldo=Number(ventaAbonoActual.Saldo||0);
+
+  // El dinero se compara siempre en centavos para evitar errores de
+  // precisión de JavaScript y, como respaldo, calculamos el saldo desde
+  // Total - Pagado en lugar de depender únicamente del campo Saldo.
+  const importe = Math.round((Number(document.getElementById('nuevoAbono').value) || 0) * 100) / 100;
+  const totalVenta = Math.round((Number(ventaAbonoActual.Total) || 0) * 100) / 100;
+  const pagadoVenta = Math.round((Number(ventaAbonoActual.Pagado) || 0) * 100) / 100;
+  const saldoCalculado = Math.max(0, Math.round((totalVenta - pagadoVenta) * 100) / 100);
+  const saldoRegistrado = Math.round((Number(ventaAbonoActual.Saldo) || 0) * 100) / 100;
+  const saldo = saldoCalculado > 0 ? saldoCalculado : saldoRegistrado;
+
   if(importe<=0){alert('El abono debe ser mayor que cero.');return;}
-  if(importe>saldo){alert('El abono no puede ser mayor al saldo pendiente.');return;}
+  // Se permite abonar hasta el saldo exacto. Solo se rechaza si excede
+  // por más de medio centavo.
+  if((importe - saldo) > 0.005){alert('El abono no puede ser mayor al saldo pendiente.');return;}
   google.script.run.withSuccessHandler(function(resultado){
     ventaAbonoActual=resultado.venta;
     document.getElementById('abonoVentaInfo').innerHTML='<div class="v20-abono-panel"><div class="v20-kicker">Abono guardado</div><div class="v20-id">'+escaparTextoUI(resultado.abono.ID_Abono)+'</div><div class="v20-meta"><strong>Venta:</strong> '+escaparTextoUI(resultado.venta.ID_Venta)+'<br><strong>Pagado:</strong> $'+Number(resultado.venta.Pagado||0).toFixed(2)+'</div><div class="v20-big-saldo">Saldo: $'+Number(resultado.venta.Saldo||0).toFixed(2)+'</div><div class="v20-meta"><strong>Estado:</strong> '+escaparTextoUI(resultado.venta.Estado||'')+'</div></div>';
